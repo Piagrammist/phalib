@@ -7,57 +7,50 @@ $COMPOSER_BIN = 'composer.cmd';
 $BUILD_DIR = path(getcwd(), 'build');
 
 
+// Do not run on web-server
+if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
+    die('Error: please run the script through the CLI.');
+}
+
 // Create build directory
 if (is_file($BUILD_DIR)) {
     println("Error: cannot create '$BUILD_DIR' directory!",
             "There's a file named 'build' in the current dir.");
     exit(1);
 }
-if (!is_dir($BUILD_DIR)) { mkdir($BUILD_DIR); }
+is_dir($BUILD_DIR) && mkdir($BUILD_DIR);
 
 // Delete composer files if they exists
 if (is_dir(path($BUILD_DIR, 'vendor'))) {
-    println("Composer project already exists! shall I remove Composer files?");
+    println("Composer project already exists!", 
+            "Shall I remove Composer files?");
     if (strtolower(prompt('[y/n]: ')) === 'y') {
         deleteTree(path($BUILD_DIR, 'vendor'));
-        if (is_file(path($BUILD_DIR, 'composer.json'))) {
-            unlink(path($BUILD_DIR, 'composer.json'));
-        }
-        if (is_file(path($BUILD_DIR, 'composer.lock'))) {
-            unlink(path($BUILD_DIR, 'composer.lock'));
-        }
+        @unlink(path($BUILD_DIR, 'composer.json'));
+        @unlink(path($BUILD_DIR, 'composer.lock'));
     }
     else {
         println("Merging '$PACKAGE' with 'composer.json'.",
-                "Press any key to continue... ('q' for quit)");
+                "Press Enter to continue... ('q' for quit)");
         if (strtolower(prompt()) === 'q') { exit; }
     }
 }
 
-// Install the latest version of the packagist package
+// Install the package
 system("$COMPOSER_BIN require -d \"$BUILD_DIR\" $PACKAGE");
-println(PHP_EOL);
 
-// Get the installed package version
-$version = null;
-if (is_file(path($BUILD_DIR, 'composer.lock'))) {
-    foreach (json_decode(
-             file_get_contents(path($BUILD_DIR, 'composer.lock')),
-             true)['packages'] as $package) {
-        if ($package['name'] === $PACKAGE) {
-            $version = $package['version'];
-            break;
-        }
+println(PHP_EOL, "Downloading packages finished.",
+                 "Continue to creating the phar?");
+if (strtolower(prompt('[y/n]: ')) === 'y') {
+    $version = getPackageVersion($PACKAGE, $BUILD_DIR);
+    $name    = $version !== null ? "$OUTPUT-$version.phar" : "$OUTPUT.phar";
+    if (makePhar($BUILD_DIR, $name)) {
+        println('Done!', "'$name' was created.");
     }
-}
-
-if (makePhar($BUILD_DIR, "$OUTPUT-$version.phar")) {
-    println('Done!', "'$OUTPUT-$version.phar' was created.");
-}
-else {
-    println("Error: cannot create/edit phar files!",
-            "Please disable 'phar.readonly' in your 'php.ini'.");
-    exit(1);
+    else {
+        println("Something went wrong...!");
+        exit(1);
+    }
 }
 
 
@@ -102,8 +95,10 @@ function makePhar(string $fromDir, string $output): bool {
     ) {
         return false;
     }
-    is_file($output) && unlink($output);
 
+    @ini_set('phar.readonly', '0');
+
+    is_file($output) && unlink($output);
     $outputName = basename($output);
 
     $phar = new Phar($output, 0, $outputName);
@@ -121,4 +116,19 @@ function makePhar(string $fromDir, string $output): bool {
     $phar->stopBuffering();
 
     return true;
+}
+
+function getPackageVersion(string $packageName, string $dir='.'): ?string {
+    $version = null;
+    if (is_file(path($dir, 'composer.lock'))) {
+        foreach (json_decode(
+                file_get_contents(path($dir, 'composer.lock')),
+                true)['packages'] as $package) {
+            if ($package['name'] === $packageName) {
+                $version = $package['version'];
+                break;
+            }
+        }
+    }
+    return $version;
 }
