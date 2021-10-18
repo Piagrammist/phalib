@@ -18,7 +18,7 @@ if (is_file($BUILD_DIR)) {
             "There's a file named 'build' in the current dir.");
     exit(1);
 }
-is_dir($BUILD_DIR) && mkdir($BUILD_DIR);
+is_dir($BUILD_DIR) || mkdir($BUILD_DIR);
 
 // Delete composer files if they exists
 if (is_dir(path($BUILD_DIR, 'vendor'))) {
