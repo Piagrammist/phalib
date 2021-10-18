@@ -88,6 +88,8 @@ function deleteTree(string $dir): bool {
 }
 
 function makePhar(string $fromDir, string $output): bool {
+    @ini_set('phar.readonly', '0');
+
     if (
         !Phar::canWrite() ||
         !is_dir($fromDir) ||
@@ -96,9 +98,7 @@ function makePhar(string $fromDir, string $output): bool {
         return false;
     }
 
-    @ini_set('phar.readonly', '0');
-
-    is_file($output) && unlink($output);
+    @unlink($output);
     $outputName = basename($output);
 
     $phar = new Phar($output, 0, $outputName);
